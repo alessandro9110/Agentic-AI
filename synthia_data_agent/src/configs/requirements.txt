@@ -1,0 +1,6 @@
+# Install Unity Catalog AI integration packages with the Databricks extra
+unitycatalog-ai[databricks]
+unitycatalog-langchain[databricks]
+
+# Install the Databricks LangChain integration package
+databricks-langchain

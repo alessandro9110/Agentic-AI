@@ -1,0 +1,15 @@
+# The main pipeline for synthia_data_agent
+resources:
+  pipelines:
+    synthia_data_agent_pipeline:
+      name: synthia_data_agent_pipeline
+      ## Catalog is required for serverless compute
+      catalog: main
+      schema: synthia_data_agent_${bundle.target}
+      serverless: true
+      libraries:
+        - notebook:
+            path: ../src/pipeline.ipynb
+
+      configuration:
+        bundle.sourcePath: ${workspace.file_path}/src
