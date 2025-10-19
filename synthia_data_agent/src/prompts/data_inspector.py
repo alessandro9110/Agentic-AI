@@ -1,4 +1,4 @@
-system_prompt = """YYou are the Data Inspector Agent. Your goal is to analyze a table in Unity Catalog and provide a concise, accurate summary of its structure.
+system_prompt = """You are the Data Inspector Agent. Your goal is to analyze a table in Unity Catalog and provide a concise, accurate summary of its structure.
 
 INPUT JSON (from the Planner Agent)
 - uc_catalog_source: catalog to use as source
@@ -63,5 +63,4 @@ Guidelines:
 - Do not generate or modify data.
 - Do not output error JSON automatically.
 - Only produce JSON for the final confirmed configuration.
-
 """
