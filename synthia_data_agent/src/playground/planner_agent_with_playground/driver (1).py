@@ -47,6 +47,8 @@
 # MAGIC     ResponsesAgentRequest,
 # MAGIC     ResponsesAgentResponse,
 # MAGIC     ResponsesAgentStreamEvent,
+# MAGIC     output_to_responses_items_stream,
+# MAGIC     to_chat_completions_input,
 # MAGIC )
 # MAGIC from openai import OpenAI
 # MAGIC from pydantic import BaseModel
@@ -55,7 +57,7 @@
 # MAGIC ############################################
 # MAGIC # Define your LLM endpoint and system prompt
 # MAGIC ############################################
-# MAGIC LLM_ENDPOINT_NAME = "databricks-llama-4-maverick"
+# MAGIC LLM_ENDPOINT_NAME = "databricks-gpt-oss-120b"
 # MAGIC
 # MAGIC SYSTEM_PROMPT = """You are the Planner Agent, the first step in the Synthia Data Agent pipeline. 
 # MAGIC   Your purpose is to understand the user's natural language request and translate it into a structured dataset specification that can be used to generate synthetic data.
@@ -190,7 +192,7 @@
 # MAGIC             warnings.filterwarnings("ignore", message="PydanticSerializationUnexpectedValue")
 # MAGIC             for chunk in self.model_serving_client.chat.completions.create(
 # MAGIC                 model=self.llm_endpoint,
-# MAGIC                 messages=self.prep_msgs_for_cc_llm(messages),
+# MAGIC                 messages=to_chat_completions_input(messages),
 # MAGIC                 tools=self.get_tool_specs(),
 # MAGIC                 stream=True,
 # MAGIC             ):
@@ -225,7 +227,7 @@
 # MAGIC             elif last_msg.get("type", None) == "function_call":
 # MAGIC                 yield self.handle_tool_call(last_msg, messages)
 # MAGIC             else:
-# MAGIC                 yield from self.output_to_responses_items_stream(
+# MAGIC                 yield from output_to_responses_items_stream(
 # MAGIC                     chunks=self.call_llm(messages), aggregator=messages
 # MAGIC                 )
 # MAGIC
@@ -245,7 +247,7 @@
 # MAGIC     def predict_stream(
 # MAGIC         self, request: ResponsesAgentRequest
 # MAGIC     ) -> Generator[ResponsesAgentStreamEvent, None, None]:
-# MAGIC         messages = self.prep_msgs_for_cc_llm([i.model_dump() for i in request.input])
+# MAGIC         messages = to_chat_completions_input([i.model_dump() for i in request.input])
 # MAGIC         if SYSTEM_PROMPT:
 # MAGIC             messages.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
 # MAGIC         yield from self.call_and_run_tools(messages=messages)
@@ -311,7 +313,7 @@ input_example = {
     "input": [
         {
             "role": "user",
-            "content": "hi"
+            "content": "Hi what can I do with you?"
         }
     ]
 }
@@ -353,61 +355,7 @@ eval_dataset = [
                 },
                 {
                     "role": "user",
-                    "content": "hi"
-                }
-            ]
-        },
-        "expected_response": None
-    },
-    {
-        "inputs": {
-            "input": [
-                {
-                    "role": "system",
-                    "content": "You are the Planner Agent, the first step in the Synthia Data Agent pipeline. \n  Your purpose is to understand the user's natural language request and translate it into a structured dataset specification that can be used to generate synthetic data.\n\n  Your main tasks are:\n  1. Interpret the user's prompt and extract all relevant details about the dataset to be generated.\n  2. Identify the domain or context (e.g., retail, finance, healthcare, IoT, logistics, etc.).\n  3. Define the dataset structure, including:\n    - The number of records to generate.\n    - The Unity Catalog and schema to use as source\n    - The name of the table to be used as source\n    - The Unity Catalog and schema to use as target\n    - The name of the table to be generated.\n  4. Suggest a default output name or table location for the generated dataset (e.g., “synthetic_data.retail_sales”).\n  5. Return a **structured JSON object** that clearly describes the dataset specifications — this will be passed to the next agent.\n\n  You must not generate data yourself — only describe the dataset to be generated.\n\n  Example output:\n  {\n    \"domain\": \"retail\",\n    \"num_records\": 1000,\n    \"uc_catalog_source\": \"financial\",\n    \"uc_schema_source\": \"sales\",\n    \"uc_table_source\": \"sales,\n    \"uc_catalog_target\": \"financial\",\n    \"uc_schema_target\": \"sales\",\n    \"uc_table_target\": \"sales\"\n    \"\n  }\n\n  Guidelines:\n  - Be concise but complete: capture all necessary schema details.\n  - If the user’s request is vague, make reasonable assumptions and note them in the output.\n  - Always return valid JSON syntax — this JSON will be parsed by the next agent.\n  - Do not attempt to select or train any generative model.\n\n  Your output will serve as input for the Data Inspector Agent."
-                },
-                {
-                    "role": "user",
-                    "content": "hi"
-                },
-                {
-                    "role": "assistant",
-                    "content": "It seems like you're ready to generate some synthetic data. Can you please provide more details about the dataset you're looking to create? For example, what domain or context does it belong to (e.g., retail, finance, healthcare), and do you have any specific requirements for the dataset structure or size? \n\nI'll help translate your request into a structured dataset specification in JSON format.\n\nHere's a template to get us started: \n- What is the domain or context of the data? \n- How many records do you want to generate? \n- Are there any specific source Unity Catalog, schema, and table you'd like to use? \n- What should be the target Unity Catalog, schema, and table for the generated data?\n\nLet's fill in these details to create your dataset specification. \n\nIf you're ready, I'll output something like this:\n```json\n{\n  \"domain\": \"\",\n  \"num_records\": ,\n  \"uc_catalog_source\": \"\",\n  \"uc_schema_source\": \"\",\n  \"uc_table_source\": \"\",\n  \"uc_catalog_target\": \"\",\n  \"uc_schema_target\": \"\",\n  \"uc_table_target\": \"\"\n}\n```"
-                },
-                {
-                    "role": "user",
-                    "content": "I want to generate financial data"
-                }
-            ]
-        },
-        "expected_response": None
-    },
-    {
-        "inputs": {
-            "input": [
-                {
-                    "role": "system",
-                    "content": "You are the Planner Agent, the first step in the Synthia Data Agent pipeline. \n  Your purpose is to understand the user's natural language request and translate it into a structured dataset specification that can be used to generate synthetic data.\n\n  Your main tasks are:\n  1. Interpret the user's prompt and extract all relevant details about the dataset to be generated.\n  2. Identify the domain or context (e.g., retail, finance, healthcare, IoT, logistics, etc.).\n  3. Define the dataset structure, including:\n    - The number of records to generate.\n    - The Unity Catalog and schema to use as source\n    - The name of the table to be used as source\n    - The Unity Catalog and schema to use as target\n    - The name of the table to be generated.\n  4. Suggest a default output name or table location for the generated dataset (e.g., “synthetic_data.retail_sales”).\n  5. Return a **structured JSON object** that clearly describes the dataset specifications — this will be passed to the next agent.\n\n  You must not generate data yourself — only describe the dataset to be generated.\n\n  Example output:\n  {\n    \"domain\": \"retail\",\n    \"num_records\": 1000,\n    \"uc_catalog_source\": \"financial\",\n    \"uc_schema_source\": \"sales\",\n    \"uc_table_source\": \"sales,\n    \"uc_catalog_target\": \"financial\",\n    \"uc_schema_target\": \"sales\",\n    \"uc_table_target\": \"sales\"\n    \"\n  }\n\n  Guidelines:\n  - Be concise but complete: capture all necessary schema details.\n  - If the user’s request is vague, make reasonable assumptions and note them in the output.\n  - Always return valid JSON syntax — this JSON will be parsed by the next agent.\n  - Do not attempt to select or train any generative model.\n\n  Your output will serve as input for the Data Inspector Agent."
-                },
-                {
-                    "role": "user",
-                    "content": "hi"
-                },
-                {
-                    "role": "assistant",
-                    "content": "It seems like you're ready to generate some synthetic data. Can you please provide more details about the dataset you're looking to create? For example, what domain or context does it belong to (e.g., retail, finance, healthcare), and do you have any specific requirements for the dataset structure or size? \n\nI'll help translate your request into a structured dataset specification in JSON format.\n\nHere's a template to get us started: \n- What is the domain or context of the data? \n- How many records do you want to generate? \n- Are there any specific source Unity Catalog, schema, and table you'd like to use? \n- What should be the target Unity Catalog, schema, and table for the generated data?\n\nLet's fill in these details to create your dataset specification. \n\nIf you're ready, I'll output something like this:\n```json\n{\n  \"domain\": \"\",\n  \"num_records\": ,\n  \"uc_catalog_source\": \"\",\n  \"uc_schema_source\": \"\",\n  \"uc_table_source\": \"\",\n  \"uc_catalog_target\": \"\",\n  \"uc_schema_target\": \"\",\n  \"uc_table_target\": \"\"\n}\n```"
-                },
-                {
-                    "role": "user",
-                    "content": "I want to generate financial data"
-                },
-                {
-                    "role": "assistant",
-                    "content": "Let's create a dataset specification for financial data.\n\nTo get started, I'll need to know a few more details. Here are my assumptions and questions:\n\n* Domain: Financial (as per your request)\n* Number of records: I'll assume 1000 records for now. Is that reasonable, or do you have a different number in mind?\n* Source Unity Catalog, schema, and table: I'll assume you're using an existing financial dataset as a reference. Can you please provide the Unity Catalog, schema, and table name you'd like to use as a source? If not, I can suggest some default values.\n* Target Unity Catalog, schema, and table: I'll suggest a default target location. Let's say \"synthetic_data.financial_transactions\".\n\nHere's a draft dataset specification:\n```json\n{\n  \"domain\": \"financial\",\n  \"num_records\": 1000,\n  \"uc_catalog_source\": \"financial_data\",\n  \"uc_schema_source\": \"transactions\",\n  \"uc_table_source\": \"historical_transactions\",\n  \"uc_catalog_target\": \"synthetic_data\",\n  \"uc_schema_target\": \"financial\",\n  \"uc_table_target\": \"financial_transactions\"\n}\n```\nPlease let me know if these assumptions are correct or if you'd like to make any changes."
-                },
-                {
-                    "role": "user",
-                    "content": "it's ok"
+                    "content": "Hi what can I do with you?"
                 }
             ]
         },
