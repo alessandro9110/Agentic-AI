@@ -1,0 +1,15 @@
+# The main pipeline for data_quality_agent
+resources:
+  pipelines:
+    data_quality_agent_pipeline:
+      name: data_quality_agent_pipeline
+      ## Catalog is required for serverless compute
+      catalog: main
+      schema: data_quality_agent_${bundle.target}
+      serverless: true
+      libraries:
+        - notebook:
+            path: ../src/pipeline.ipynb
+
+      configuration:
+        bundle.sourcePath: ${workspace.file_path}/src
