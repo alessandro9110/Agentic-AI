@@ -56,9 +56,25 @@ class LangGraphResponsesAgent(ResponsesAgent):
         output = []
         if role == "ai":
             if message.get("content"):
+                content = message["content"]
+
+                # --- 🔧 Sanitize content to always be a string
+                if isinstance(content, list):
+                    # concatena eventuali blocchi di tipo text/reasoning
+                    content = " ".join(
+                        c.get("text", "") if isinstance(c, dict) else str(c)
+                        for c in content
+                    )
+                elif isinstance(content, dict):
+                    # se è un singolo dict, estrai 'text' o converti in stringa
+                    content = content.get("text", str(content))
+                elif not isinstance(content, str):
+                    # fallback finale
+                    content = str(content)
+
                 output.append(
                     self.create_text_output_item(
-                        text=message["content"],
+                        text=content.strip(),
                         id=message.get("id") or str(uuid4()),
                     )
                 )
