@@ -1,70 +1,127 @@
 # Agentic-AI
 
-Synthia Data Agent is an end-to-end Databricks solution for generating high-quality synthetic datasets through an AI agent workflow. The project demonstrates how to orchestrate multiple agents, Databricks Unity Catalog assets, and MLflow's ResponsesAgent interface to deliver an interactive synthetic data experience.
+This repository contains two related Databricks-focused agent projects that demonstrate how to orchestrate multi-agent workflows, Databricks Asset Bundles, Unity Catalog validations, and MLflow/Model Serving for synthetic data generation and metadata enrichment.
 
-## Project Highlights
-- **Agentic pipeline**: A planner agent (LangGraph + Databricks LLM) interprets user intent and prepares dataset specifications, handing them to downstream agents.
-- **Databricks native**: Bundled resources provision pipelines, jobs, and Unity Catalog assets that run entirely on Databricks serverless or connected compute.
-- **Governed data validation**: The data inspector agent validates catalogs, schemas, and tables via Unity Catalog SQL helper functions before profiling source data.
-- **MLflow integration**: Agents are packaged as `ResponsesAgent` implementations, enabling evaluation, logging, and deployment from notebooks or Python code.
-- **Playground-first development**: Notebooks exported from the Databricks AI Playground document experimentation, evaluation, and deployment workflows.
+Contents
 
-## Repository Layout
+- `synthia_data_agent/` — A multi-agent framework to plan, validate and generate synthetic datasets on Databricks. Implements a planner agent, prompts, Databricks asset bundles (pipelines & jobs), and notebooks to prepare and run the system.
+
+- `metadata_enrichment_agent/` — A lightweight Databricks asset bundle scaffold that contains definitions to deploy jobs/pipelines focused on metadata enrichment tasks.
+
+Why this repo exists
+
+- Demonstrate agent orchestration (planner + data inspector) that translates natural language requests into dataset specifications.
+
+- Show Databricks-first patterns: Asset Bundles, Unity Catalog helper functions, Delta Live Tables pipelines, and Model Serving integration.
+
+- Provide examples and notebooks for rapid experimentation in the Databricks Playground and for packaging agents as MLflow Responses Agents.
+
+Repository layout (high level)
+
 - `synthia_data_agent/`
-  - `src/agents/`: Python agent implementations (currently the planner agent packaged for MLflow deployment).
-  - `src/prompts/`: System prompts that define planner and data inspector behaviors.
-  - `src/configs/`: Environment configuration, including the Databricks LLM endpoint name.
-  - `src/playground/`: Auto-generated Databricks notebooks used to prototype and evaluate agents.
-  - `resources/`: Databricks bundle definitions for pipelines and jobs.
-  - `tests/`: Pytest suite scaffolding for Databricks Connect based validation.
-  - `pyproject.toml`: Python project definition with `uv` build configuration.
 
-## Prerequisites
-- Python 3.10-3.13.
-- [`uv`](https://docs.astral.sh/uv/) for dependency management and wheel builds.
-- Access to a Databricks workspace with:
-  - A Mosaic AI or Databricks Model Serving endpoint named in `src/configs/variables.py`.
-  - Unity Catalog permissions to read source tables and publish synthetic outputs.
-  - Databricks Bundle permissions to deploy pipelines and jobs specified in `databricks.yml`.
+  - `databricks.yml` — bundle manifest for Databricks Asset Bundles.
 
-## Local Development
-1. **Install dependencies**
-   ```bash
-   uv sync --group dev
-   ```
-   This installs pytest, Databricks LangChain integrations, and Databricks Connect for local execution.
+  - `resources/` — pipeline and job definitions (YAML) for pipelines and jobs to run on Databricks.
 
-2. **Configure environment**
-   - Update catalog, schema, and LLM endpoint values in `synthia_data_agent/src/configs/variables.py`.
-   - Ensure Databricks credentials are available (e.g., via `databricks configure` or environment variables) before running Databricks Connect or Bundles.
+  - `src/` — source code and notebooks:
 
-3. **Run tests**
-   ```bash
-   uv run pytest
-   ```
-   Tests assume connectivity to a Databricks workspace and a sample dataset accessible via Unity Catalog.
+    - `agents/` — Python agent implementations (e.g. `planner_agent.py`).
 
-## Databricks Deployment
-1. **Bundle validation and deployment**
-   ```bash
-   databricks bundle validate
-   databricks bundle deploy --target dev
-   ```
-2. **Run the job**
-   ```bash
-   databricks bundle run --target dev synthia_data_agent_job
-   ```
-   The deployed job executes the exported notebooks, refreshes the Delta Live Tables pipeline, and runs the wheel entry point `synthia_data_agent.main:main`.
+    - `prompts/` — prompt templates for planner and data inspector agents.
 
-3. **Serving the planner agent**
-   - The planner agent (`src/agents/planner_agent.py`) is registered with MLflow and exposed through Databricks Model Serving via the notebook in `src/playground/planner_agent_with_playground/driver.py`.
-   - Use the MLflow UI to promote the model to Unity Catalog and deploy the serving endpoint referenced in `variables.py`.
+    - `configs/` — runtime configuration and variables used by the agents.
 
-## Extending the Agents
-- Implement the data inspector agent by following the prompt contract in `src/prompts/data_inspector.py` and packaging it similarly to the planner agent.
-- Add synthetic data generation tools (CTGAN, CopulaGAN, TVAE, etc.) and connect them as downstream nodes in the LangGraph state machine.
-- Create Unity Catalog functions referenced in the prompts using the notebook in `src/tools/create_uc_function.ipynb`.
+    - `playground/` — driver scripts and playground notebooks used to prototype and test agents locally/in-DB.
 
-## Additional Notes
-- The Databricks notebooks (`*.ipynb`) were exported from the UI and include `%magic` commands that run only inside Databricks.
-- Encoding artifacts in some legacy files originate from the export process; normalize them if you plan to publish external documentation.
+    - `setup/`, `tools/` — notebooks to prepare environment and register Unity Catalog helper functions.
+
+  - `tests/` — pytest tests that assume Databricks connectivity (Databricks Connect / integration tests).
+
+  - `pyproject.toml` — Python project configuration and dependencies.
+
+- `metadata_enrichment_agent/`
+
+  - A Databricks Asset Bundle scaffold (manifest, README) to deploy metadata enrichment jobs and pipelines.
+
+Quickstart — local development (short)
+
+1. Install dependencies and tooling
+
+- Python 3.10–3.13
+- uv (dependency manager used in the projects): pip install uv
+- Databricks CLI (v0.205+) if you plan to work with Bundles locally
+
+1. Install project dependencies
+
+From the repository root run:
+
+```powershell
+uv sync
+```
+
+1. Configure Databricks credentials (PowerShell example)
+
+```powershell
+setx DATABRICKS_HOST "https://<workspace>.azuredatabricks.net"
+setx DATABRICKS_TOKEN "<personal-access-token>"
+```
+
+1. Update configuration
+
+Edit `synthia_data_agent/src/configs/variables.py` (catalog, schema, LLM endpoint name, etc.).
+
+1. Run tests (integration-style; they expect a reachable Databricks environment)
+
+```powershell
+uv run pytest
+```
+
+Databricks deployment (short)
+
+- Validate and deploy the asset bundle to a target environment (example uses the `uv run` tasks configured in the projects):
+
+  ```powershell
+  uv run databricks bundle validate --target dev
+  uv run databricks bundle deploy --target dev
+  uv run databricks bundle run --target dev synthia_data_agent_job
+  ```
+
+- Use the Databricks UI or MLflow Model Registry to manage and serve any packaged agents (planner agent is shown in the `src/playground` driver).
+
+Important files and next steps
+
+- `synthia_data_agent/src/agents/planner_agent.py` — planner agent implementation and entrypoint.
+
+- `synthia_data_agent/src/prompts/` — prompt contracts (planner, data inspector).
+
+- `synthia_data_agent/src/tools/create_uc_function.ipynb` — notebook to register Unity Catalog helper functions used by the agents.
+
+- `synthia_data_agent/resources/` — pipeline & job YAML definitions used by the Databricks bundle.
+
+- `metadata_enrichment_agent/resources/` — bundle definitions for metadata-enrichment workflows.
+
+Notes and recommendations
+
+- Notebooks include Databricks-specific `%` magics and may need cleaning to run outside Databricks.
+
+- Tests are integration-style and can require Databricks Connect or a configured remote cluster. If you want to run unit tests locally, consider mocking Databricks and MLflow clients.
+
+- Keep prompts and agent contracts versioned and reviewed for compliance before generating synthetic data from production sources.
+
+Where to get more details
+
+- Read the per-project READMEs for deeper setup instructions and examples:
+
+  - `synthia_data_agent/README.md` — in-depth setup, architecture, and run instructions.
+
+  - `metadata_enrichment_agent/README.md` — Databricks Asset Bundle usage for the metadata enrichment scaffold.
+
+If you'd like, I can also:
+
+- Add a small example script to show the planner agent flow locally (mocking the Databricks calls).
+
+- Add a CONTRIBUTING.md with development conventions for this repo.
+
+---
+Last updated: 2025-10-20
