@@ -2,7 +2,7 @@
 # Synthia Data Agent
 
 ## Panoramica
-Synthia Data Agent è un piccolo ecosistema di agenti progettato per aiutare a pianificare, validare e preparare la generazione di dataset sintetici su Databricks. L'obiettivo principale è trasformare richieste in linguaggio naturale in specifiche strutturate di dataset, verificare le risorse sorgente in Unity Catalog e produrre metadata utili per i successivi passi di generazione (modelli GAN/TVAE, pipeline DLT, ecc.).
+Synthia Data Agent è un piccolo ecosistema di agenti progettato per aiutare a pianificare, validare e preparare la generazione di dataset sintetici su Databricks. L'obiettivo principale è trasformare richieste in linguaggio naturale in specifiche strutturate di dataset, verificare le risorse sorgente in Unity Catalog e produrre metadati utili per i successivi passi di generazione (modelli GAN/TVAE, pipeline DLT, ecc.).
 
 L'agente non esegue direttamente la generazione sintetica dei dati: si occupa della fase di analisi e orchestrazione (planning, validazione risorse, raccolta metadati). Questo rende il componente riutilizzabile in pipeline più ampie dove il passo di generazione può essere delegato a moduli separati.
 
@@ -94,6 +94,10 @@ Di seguito una panoramica delle sottocartelle e dei file principali all'interno 
 ---
 
 Se vuoi, posso:
--- Aggiungere esempi concreti di input/OUTPUT del `planner_agent` nel README.
+### Esempio di input/output del `planner_agent`
+**Input (richiesta utente):**
+"Genera un dataset sintetico di clienti con colonne nome, età, email, e stato civile."
+
+**Output (specifica strutturata):**
 -- Creare una checklist di setup automatica (script/Makefile) per eseguire i notebook di setup e registrare le funzioni SQL.
 
