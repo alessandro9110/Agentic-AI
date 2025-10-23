@@ -1,5 +1,6 @@
 import yaml
 import json
+from uuid import uuid4
 from databricks_langchain import  ChatDatabricks, DatabricksFunctionClient, UCFunctionToolkit, set_uc_function_client
 
 from typing import Any, Generator, Literal
@@ -51,6 +52,12 @@ chat_model = ChatDatabricks(endpoint=variables.LLM_ENDPOINT_NAME)
 #######################################################
 # Configure Tools
 #######################################################
+client = DatabricksFunctionClient()
+functions = client.list_functions(catalog=variables.CATALOG_NAME, schema=variables.SCHEMA_NAME)
+func_names = []
+for f in functions:
+    func_names.append(f"{variables.CATALOG_NAME}.{variables.SCHEMA_NAME}.{f.name}")
+
 # Add all the Unity Catalog functions explicitly for data inspection
 uc_function_names = [
     f"{variables.CATALOG_NAME}.{variables.SCHEMA_NAME}.check_catalog_exist",
@@ -61,9 +68,13 @@ uc_function_names = [
     #f"{variables.CATALOG_NAME}.{variables.SCHEMA_NAME}.get_table_summary"
 ]
 
+# Add the explicit functions to our list if they're not already included
+for func_name in uc_function_names:
+    if func_name not in func_names:
+        func_names.append(func_name)
 
 # assign function to UCFunctionToolkit
-toolkit = UCFunctionToolkit( function_names=uc_function_names)
+toolkit = UCFunctionToolkit(function_names=func_names)
 tools_uc = toolkit.tools
 llm_with_tools = chat_model.bind_tools(tools_uc)
 
