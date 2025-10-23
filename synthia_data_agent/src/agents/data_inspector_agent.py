@@ -1,4 +1,5 @@
 import yaml
+import json
 from databricks_langchain import  ChatDatabricks, DatabricksFunctionClient, UCFunctionToolkit, set_uc_function_client
 
 from typing import Any, Generator, Literal
@@ -50,13 +51,19 @@ chat_model = ChatDatabricks(endpoint=variables.LLM_ENDPOINT_NAME)
 #######################################################
 # Configure Tools
 #######################################################
-client = DatabricksFunctionClient()
-functions = client.list_functions(catalog=variables.CATALOG_NAME, schema=variables.SCHEMA_NAME)
-func_names = []
-for f in functions:
-    func_names.append(f"{variables.CATALOG_NAME}.{variables.SCHEMA_NAME}.{f.name}")
+# Add all the Unity Catalog functions explicitly for data inspection
+uc_function_names = [
+    f"{variables.CATALOG_NAME}.{variables.SCHEMA_NAME}.check_catalog_exist",
+    f"{variables.CATALOG_NAME}.{variables.SCHEMA_NAME}.check_schema_exist", 
+    f"{variables.CATALOG_NAME}.{variables.SCHEMA_NAME}.check_table_exist",
+    f"{variables.CATALOG_NAME}.{variables.SCHEMA_NAME}.get_table_columns",
+    #f"{variables.CATALOG_NAME}.{variables.SCHEMA_NAME}.get_column_statistics",
+    #f"{variables.CATALOG_NAME}.{variables.SCHEMA_NAME}.get_table_summary"
+]
+
+
 # assign function to UCFunctionToolkit
-toolkit = UCFunctionToolkit(function_names=func_names)
+toolkit = UCFunctionToolkit( function_names=uc_function_names)
 tools_uc = toolkit.tools
 llm_with_tools = chat_model.bind_tools(tools_uc)
 
@@ -159,7 +166,7 @@ builder.add_node("tools", ToolNode(tools_uc))
 
 # --- edges
 builder.add_edge(START, "data_inspector")
-builder.add_edge("tools", "data_inspector")   # ritorno dopo l’esecuzione tool
+builder.add_edge("tools", "data_inspector")   # ritorno dopo l'esecuzione tool
 
 def tools_condition(state: DataInspectorState) -> str:
     last = state["messages"][-1]
