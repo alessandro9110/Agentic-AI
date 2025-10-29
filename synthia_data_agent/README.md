@@ -1,121 +1,103 @@
+
 # Synthia Data Agent
 
 ## Panoramica
-Synthia Data Agent e un framework multi agente pensato per orchestrare la generazione di dataset sintetici direttamente su Databricks. Il sistema traduce richieste in linguaggio naturale, valida le sorgenti in Unity Catalog e produce specifiche di dataset che possono essere passate a modelli generativi come CTGAN, CopulaGAN o TVAE, mantenendo privacy e conformita.
+Synthia Data Agent è un piccolo ecosistema di agenti progettato per aiutare a pianificare, validare e preparare la generazione di dataset sintetici su Databricks. L'obiettivo principale è trasformare richieste in linguaggio naturale in specifiche strutturate di dataset, verificare le risorse sorgente in Unity Catalog e produrre metadati utili per i successivi passi di generazione (modelli GAN/TVAE, pipeline DLT, ecc.).
 
-## Caratteristiche principali
-- Comprensione automatica delle richieste utente e pianificazione del dataset target.
-- Validazione granulare di cataloghi, schemi e tabelle in Unity Catalog tramite funzioni SQL dedicate.
-- Integrazione con LangChain, LangGraph e Databricks Model Serving per orchestrare agenti conversazionali.
-- Tracciamento con MLflow Responses Agents per salvare cronologia e output dei nodi.
-- Notebook e strumenti per configurare l'ambiente (funzioni SQL, setup del workspace, playground interattivo).
+L'agente non esegue direttamente la generazione sintetica dei dati: si occupa della fase di analisi e orchestrazione (planning, validazione risorse, raccolta metadati). Questo rende il componente riutilizzabile in pipeline più ampie dove il passo di generazione può essere delegato a moduli separati.
 
-## Architettura logica
-- Planner Agent (`src/agents/planner_agent.py`): riceve i messaggi, applica il prompt di `src/prompts/planner.py` e costruisce la richiesta strutturata tramite LangGraph.
-- Data Inspector Agent: definito nel prompt `src/prompts/data_inspector.py`, verifica l'esistenza delle risorse Unity Catalog e raccoglie metadati della tabella.
-- Funzioni SQL di supporto (`src/tools/create_uc_function.ipynb`): registra le funzioni `check_catalog_exist`, `check_schema_exist` e `check_table_exist` nello schema `agentic_ai.synthia_data_agent`.
-- Pipeline e job Databricks: descritti in `resources/synthia_data_agent.pipeline.yml` e `resources/synthia_data_agent.job.yml`, orchestrati tramite Databricks Asset Bundles (`databricks.yml`).
-- Notebook operativi (`src/1.planner_agent.ipynb`, `src/2.data_inspector_agent.ipynb`, `src/setup/prepare_environment.ipynb`) per esplorare, validare e preparare l'ambiente.
+## Cosa fa questo agente (in breve)
 
-## Prerequisiti
-- Workspace Databricks con Unity Catalog abilitato e accesso a Serverless SQL o cluster compatibili.
-- Endpoint LLM su Databricks Model Serving (per esempio `databricks-llama-4-maverick`), configurato per accettare chiamate da LangChain.
-- Python 3.10 - 3.13 e strumenti da riga di comando: Git, [uv](https://docs.astral.sh/uv/), Databricks CLI v0.205 o successivo.
-- Credenziali Databricks esportate come variabili d'ambiente (`DATABRICKS_HOST`, `DATABRICKS_TOKEN`, eventuale `DATABRICKS_CLUSTER_ID` o `DATABRICKS_SERVERLESS_COMPUTE_ID`).
+- Riceve input in linguaggio naturale (es. "Genera un dataset sintetico di clienti con colonne X, Y, Z")
+- Pianifica la struttura target del dataset (tipi, cardinalità, colonne sensibili, trasformazioni richieste)
+- Verifica l'esistenza e lo stato delle risorse in Unity Catalog (cataloghi, schemi, tabelle)
+- Raccoglie metadati della tabella sorgente (schema, tipi di dato, statistiche di base)
+- Produce una specifica strutturata che può essere passata a moduli di generazione o a pipeline Databricks
+- Registra/tracka output e decisioni (possibile integrazione con MLflow Responses o simili)
 
-## Setup locale
-1. Clonare il repository e posizionarsi nella cartella radice.
-2. Installare uv (se non presente):  
-   ```bash
-   pip install uv
-   ```
-3. Installare le dipendenze del progetto:  
-   ```bash
-   uv sync
-   ```
-4. Configurare le variabili d'ambiente Databricks. Esempio su PowerShell:  
-   ```powershell
-   setx DATABRICKS_HOST "https://<workspace>.azuredatabricks.net"
-   setx DATABRICKS_TOKEN "<personal-access-token>"
-   ```
-   Su shell Bash usare `export`.
-5. Facoltativo: creare un file `.env` per riutilizzare le credenziali durante l'esecuzione di `uv run`.
-6. Validare la configurazione del bundle:  
-   ```bash
-   uv run databricks bundle validate --target dev
-   ```
+## Sub-agenti
 
-## Configurazione Databricks
-- Aggiornare `src/configs/variables.py` con catalogo, schema e nome dell'endpoint LLM corretti.
-- Eseguire il notebook `src/setup/prepare_environment.ipynb` per creare catalogo, schema e privilegi minimi.
-- Lanciare `src/tools/create_uc_function.ipynb` per registrare le funzioni SQL che gli agenti utilizzeranno durante la validazione.
-- Verificare che l'endpoint LLM indicato da `LLM_ENDPOINT_NAME` sia attivo e accessibile dal workspace.
-- Se necessario, aggiornare i file YAML in `resources/` (job, pipeline) con percorsi e impostazioni specifiche dell'organizzazione.
+Questa sezione descrive i sub-agenti che compongono il Synthia Data Agent. I sub-agenti sono componenti specializzati invocati dall'orchestrator/coordinatore principale (es. il Planner orchestratòr o il framework che esegue il bundle Databricks). Ognuno ha un ruolo circoscritto (analisi, validazione, raccolta metadati) e definisce un piccolo "contratto" input/output per facilitare l'integrazione.
 
-## Esecuzione del bundle
-- Deploy dell'ambiente di sviluppo:  
-  ```bash
-  uv run databricks bundle deploy --target dev
-  ```
-- Avvio del job principale (includera notebook, refresh pipeline e task wheel):  
-  ```bash
-  uv run databricks bundle run main_task --target dev
-  ```
-- Esecuzione della pipeline Delta Live Tables definita nel bundle:  
-  ```bash
-  uv run databricks bundle run refresh_pipeline --target dev
-  ```
-- Per il playground locale, lanciare il driver in `src/playground/planner_agent_with_playground/driver.py` passando eventuali variabili d'ambiente richieste.
+### Planner (sub-agent)
 
-## Test e validazione
-- I test usano Databricks Connect per connettersi al workspace. Assicurarsi che il cluster remoto sia compatibile con la versione installata (`databricks-connect>=15.4,<15.5`).
-- Avviare la suite:  
-  ```bash
-  uv run pytest
-  ```
-- Durante i test viene creata una sessione Spark condivisa (`tests/conftest.py`) e viene forzata la modalita serverless se non e gia definito un cluster.
+- Scopo: ricevere una richiesta in linguaggio naturale e trasformarla in una specifica strutturata di dataset pronta per la generazione o per essere passata a un orchestrator. Definisce colonne target, tipi, vincoli di privacy/sensibilità, dimensionamento stimato e trasformazioni richieste.
+- Dove si trova: implementazione principale in `src/agents/planner_agent.py` (notebook dimostrativo: `src/1.planner_agent.ipynb`).
+- Come viene invocato: tipicamente chiamato dal coordinatore principale quando arriva una richiesta utente o come parte di una pipeline di orchestrazione.
+- Contratto (sintetico):
+  - Input: testo libero (richiesta utente) + opzionali parametri di contesto (catalogo/schema/tabella, vincoli di privacy).
+  - Output: oggetto strutturato (es. JSON) con campi come `columns`, `types`, `sensitive_columns`, `estimated_rows`, `transformations`, `notes`.
+  - Modalità di errore: input ambiguo, mancanza di contesto o incongruenze tra richieste e risorse disponibili. Deve restituire messaggi diagnostici che l'orchestrator può loggare o mostrare all'utente.
 
-## Struttura del repository
-```text
-.
-|-- databricks.yml
-|-- resources/
-|   |-- synthia_data_agent.job.yml
-|   `-- synthia_data_agent.pipeline.yml
-|-- src/
-|   |-- 1.planner_agent.ipynb
-|   |-- 2.data_inspector_agent.ipynb
-|   |-- agents/
-|   |   `-- planner_agent.py
-|   |-- configs/
-|   |   |-- requirements.txt
-|   |   `-- variables.py
-|   |-- playground/
-|   |   `-- planner_agent_with_playground/
-|   |       `-- driver.py
-|   |-- prompts/
-|   |   |-- data_inspector.py
-|   |   `-- planner.py
-|   |-- setup/
-|   |   `-- prepare_environment.ipynb
-|   |-- tools/
-|   |   `-- create_uc_function.ipynb
-|   `-- typings/
-|       `-- __builtins__.pyi
-`-- tests/
-    |-- conftest.py
-    `-- main_test.py
-```
+### Data Inspector (sub-agent)
 
-## Suggerimenti operativi
-- Tenere sincronizzati i prompt con le policy di sicurezza aziendali, documentando eventuali cambiamenti rilevanti.
-- Registrare con MLflow le versioni stabili degli agenti e usare il Model Registry per la promozione in produzione.
-- Automatizzare la creazione delle funzioni SQL tramite pipeline se devono essere mantenute su piu ambienti.
-- Prima di generare dati sintetici reali, eseguire una revisione legale e di compliance per assicurarsi che i dataset di origine possano essere elaborati.
+- Scopo: ispezionare e validare risorse sorgente in Unity Catalog, raccogliendo metadati e statistiche utili (schema, tipi, distribuzioni sommarie, null ratio, candidate key). Queste informazioni aiutano il Planner a produrre specifiche realistiche.
+- Dove si trova: definito come flusso di ispezione nei notebook e prompt (`src/2.data_inspector_agent.ipynb`, `src/prompts/data_inspector.py`). Alcune funzionalità usano utility in `src/tools/` per registrare e chiamare funzioni SQL su Databricks.
+- Come viene invocato: chiamato dal planner o dall'orchestrator quando è necessario validare una risorsa sorgente o raccogliere statistiche.
+- Contratto (sintetico):
+  - Input: identificatore risorsa (catalog, schema, table) e credenziali/contesto per interrogare Unity Catalog/SQL.
+  - Output: metadati strutturati (schema colonne, tipi, valori mancanti per colonna, statistiche di base come min/max/avg, distribuzioni approssimate, suggerimenti su colonne sensibili).
+  - Modalità di errore: permessi insufficienti, risorsa non trovata, query troppo pesante o timeout. In questi casi il sub-agent ritorna messaggi diagnostici e suggerisce azioni (es. eseguire statistiche campionate o richiedere permessi).
 
-## Risorse utili
-- Documentazione Databricks Asset Bundles: https://docs.databricks.com/dev-tools/bundles/
-- Documentazione Databricks Connect: https://docs.databricks.com/dev-tools/databricks-connect.html
-- uv package manager: https://docs.astral.sh/uv/
-- MLflow Responses: https://mlflow.org/docs/latest/llms/agents/index.html
+
+## Contenuto della cartella `src/`
+
+Di seguito una panoramica delle sottocartelle e dei file principali all'interno di `src/` con una breve spiegazione del loro scopo.
+
+- `src/agents/`
+  - Contiene l'implementazione degli agenti programmati. Al momento principale è il `planner_agent.py` che riceve i messaggi utente, applica i prompt corretti e costruisce la richiesta strutturata (usando LangGraph/LangChain come orchestratori).
+
+- `src/configs/`
+  - File di configurazione e variabili condivise per l'agente. Per esempio `variables.py` contiene nomi di catalogo/schema/endpoint LLM da aggiornare per l'ambiente, mentre `requirements.txt` raccoglie dipendenze specifiche per il sotto-modulo.
+
+- `src/playground/`
+  - Esempi, driver e script di test/esperimenti. In particolare questa cartella include esperimenti e test realizzati utilizzando l'AI Playground di Databricks (notebook/driver che riproducono scenari interattivi, chiamate all'endpoint LLM, e flow di debug). Utile per riprodurre demo rapide o per sviluppo iterativo prima del deploy su Databricks.
+
+- `src/prompts/`
+  - Prompt testuali usati dagli agenti (planner, data inspector). I prompt sono il punto di integrazione tra il codice e il modello LLM e vanno mantenuti sincronizzati con le policy aziendali.
+
+- `src/setup/`
+  - Notebook e script di setup che aiutano a preparare l'ambiente Databricks (creazione cataloghi, privilege grants, ecc.). Eseguire questi notebook prima di lanciare i job/pipeline in ambienti nuovi.
+
+- `src/tools/`
+  - Utility e notebook che registrano funzioni SQL di supporto (per esempio funzioni che verificano l'esistenza di cataloghi, schemi e tabelle in Unity Catalog). Queste funzioni vengono poi invocate dagli agenti durante la validazione.
+
+- `src/typings/`
+  - Tipizzazioni e file stub utili durante lo sviluppo per migliorare l'editor experience e l'analisi statica.
+
+- Notebook principali
+  - `src/1.planner_agent.ipynb`: notebook dimostrativo che mostra come usare il planner agent passo-passo.
+  - `src/2.data_inspector_agent.ipynb`: notebook per la validazione delle risorse tramite i prompt del data inspector.
+
+## Esempio di file chiave
+
+- `src/agents/planner_agent.py`: implementa la logica di parsing del prompt e produzione della specifica di dataset.
+- `src/configs/variables.py`: punto unico per configurare catalogo, schema e nome dell'endpoint LLM.
+- `src/tools/create_uc_function.ipynb`: notebook che registra le funzioni SQL (es. `check_catalog_exist`, `check_schema_exist`, `check_table_exist`) nello schema dedicato.
+
+## Come utilizzare al volo (nota rapida)
+
+- Aggiornare `src/configs/variables.py` con i valori del workspace Databricks e l'endpoint LLM.
+- Eseguire i notebook in `src/setup/` per predisporre cataloghi e privilegi.
+- Usare i notebook `src/1.planner_agent.ipynb` e `src/2.data_inspector_agent.ipynb` per testare il flusso locale o eseguire i driver in `src/playground/`.
+
+## Esecuzione dei test
+
+- La suite di test (`tests/`) usa Databricks Connect per connettersi al workspace remoto nelle integrazioni. Seguire le istruzioni nel README principale per configurare `DATABRICKS_HOST` e `DATABRICKS_TOKEN` prima di eseguire `uv run pytest`.
+
+## Note operative e suggerimenti
+
+- Tenere i prompt aggiornati e verificati contro le policy aziendali.
+- Tracciare le decisioni chiave con MLflow o simili quando si passa in produzione.
+- Automatizzare la registrazione delle funzioni SQL e la creazione del catalogo tramite i bundle Databricks quando si promuove in ambienti diversi.
+
+---
+
+Se vuoi, posso:
+### Esempio di input/output del `planner_agent`
+**Input (richiesta utente):**
+"Genera un dataset sintetico di clienti con colonne nome, età, email, e stato civile."
+
+**Output (specifica strutturata):**
+-- Creare una checklist di setup automatica (script/Makefile) per eseguire i notebook di setup e registrare le funzioni SQL.
 
